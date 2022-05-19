@@ -1,0 +1,1016 @@
+---
+title: "School Integration Models"
+author: "Laura Hinton"
+date: "4/28/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r setup}
+library(tidyverse)
+library(tidymodels)
+library(vip)
+library(rpart.plot)
+library(ranger)
+library(doParallel)
+library(RColorBrewer)
+library(beepr)
+library(kernlab)
+```
+
+```{r}
+merged_data_v3 <- read_csv("merged data v3.csv")
+
+# number of outliers
+merged_data_v3 |>
+  filter(outlier == 1)
+
+```
+
+## Hispanic - white Learning Rate Gap Model 
+
+```{r}
+whg_merged_data_v3 <- merged_data_v3 |>
+  filter(outlier == 0) |> 
+  select(lr_all_ols_whg, leaid,
+           student_teacher_ratio,
+           per_pupil_exp,
+           percent_urban,
+           percent_suburb,
+           percent_town,
+           percent_rural,
+           percent_city_large,
+           percent_city_midsize,
+           percent_city_small,
+           percent_suburb_large,
+           percent_suburb_midsize,
+           percent_suburb_small,
+           percent_town_fringe,
+           percent_town_distant,
+           percent_town_remote,
+           percent_rural_fringe,
+           percent_rural_distant,
+           percent_rural_remote,
+           percent_native_american,
+           percent_asian,
+           percent_hispanic,
+           percent_black,
+           percent_white,
+           percent_ecd,
+           percent_ell,
+           percent_sped,
+           total_enrollment,
+           #ses_black_bayes,
+           #ses_hsp_bayes,
+           #ses_white_bayes,
+           diffexpecd_blkwht,
+           diffexpecd_hspwht,
+           diffexpmin2_blkwht,
+           diffexpmin2_hspwht,
+           #sesavgall,
+           #diffexpmin2_asnwht,
+           #diffexpmin2_namwht,
+           ses_all_bayes,
+         pct_stu_iss_black,
+         pct_students_ooss_single_black,
+         pct_students_ooss_multiple_black,
+         pct_expulsions_no_ed_serv_black,
+         pct_expulsions_with_ed_black,
+         pct_expulsions_no_tol_black,
+         pct_students_arrested_black,
+         pct_students_ooss_single_hsp,
+         pct_students_ooss_multiple_hsp,
+         pct_expulsions_no_ed_serv_hsp,
+         #pct_expulsions_with_ed_serv_hsp,
+         pct_expulsions_with_ed_hsp,
+         pct_expulsions_no_tol_hsp,
+         pct_students_arrested_hsp,
+         pct_students_ooss_single_white,
+         pct_students_ooss_multiple_white,
+         #pct_expulsions_no_ed_serv_white,
+         pct_expulsions_with_ed_white,
+         pct_expulsions_no_tol_white,
+         pct_students_arrested_white) |> 
+  drop_na()
+
+```
+
+```{r split}
+set.seed(1234)
+data_split <- 
+  initial_split(whg_merged_data_v3, 
+                prop = .8, 
+                strata = lr_all_ols_whg)
+
+data_train <- 
+  training(data_split)
+
+data_test <-
+  testing(data_split)
+```
+
+```{r specify recipe}
+# specify recipe
+data_recipe <- 
+  recipe(lr_all_ols_whg ~ .,
+         data = data_train) |> 
+  update_role(leaid, new_role = "ID")
+data_recipe
+```
+
+```{r random forest}
+ref_spec <- 
+  rand_forest(mtry = tune(),
+              trees = tune(),
+              min_n = 10) |>
+  set_mode("regression") |>
+  set_engine("ranger", 
+             importance = "impurity")
+```
+
+```{r cv}
+rf_grid <- grid_regular(mtry(range = c(1, 50)), # n predictors
+                        trees(range = c(5, 200)),
+                        levels = c(50, 5))
+rf_grid
+
+data_cv <- 
+  vfold_cv(data_train, v = 5)
+```
+
+```{r rf wf}
+rf_wf <-workflow() |> 
+  add_model(ref_spec) |> 
+  add_recipe(data_recipe)
+```
+
+```{r rf train}
+all_cores <- parallel::detectCores(logical = FALSE)
+registerDoParallel(cores = all_cores)
+set.seed(1234)
+
+rf_results <-
+  rf_wf |> 
+  tune_grid(resamples = data_cv,
+            grid = rf_grid)
+
+rf_results
+beep("mario")
+```
+
+```{r plot metrics}
+
+tree_cols <- brewer.pal(6, "Blues")[2:6]
+
+rf_results |>
+  collect_metrics() |>
+  filter(.metric == "rmse") |>
+  ggplot(aes(x = mtry, 
+             y = mean, 
+             color =  factor(trees))) +
+  geom_line() +
+  geom_point() +
+  labs(y = "rmse") +
+  scale_color_manual(values = tree_cols)
+```
+
+```{r rf best model}
+best_forest <-
+  rf_results |>
+  select_best("rmse")
+
+best_forest
+
+final_rf_wf <-
+  rf_wf |>
+  finalize_workflow(best_forest)
+
+final_rf_wf
+```
+
+```{r rf final model}
+final_rf_train <-
+  final_rf_wf |> 
+  fit(data = data_train)
+
+final_rf_train
+```
+
+```{r}
+final_rf_train_fit <-
+  final_rf_train |>
+  extract_fit_parsnip()
+final_rf_train_fit
+
+rfvip_whg <- vip(final_rf_train_fit, num_features  = 50) + 
+  ggtitle("Variable Importance for White-Hispanic Learning Rate Gap Random Forest")
+rfvip_whg
+```
+
+```{r eval}
+final_rf_fit <- 
+  final_rf_wf |> 
+  last_fit(data_split) 
+final_rf_fit
+
+final_rf_fit |> 
+  collect_metrics()
+
+final_rf_fit |> 
+  collect_predictions() |> 
+  conf_mat(truth = lr_all_ols_whg,            
+           estimate = .pred_class) |>  # change this
+  autoplot(type = "mosaic")
+
+# change this
+final_rf_fit |> 
+  collect_predictions() |> 
+  roc_curve(AtRisk, .pred_Yes,  event_level = "second") |>  
+  autoplot()
+```
+
+```{r speed}
+# speed up computation with parallel processing (optional)
+all_cores <- parallel::detectCores(logical = FALSE)
+registerDoParallel(cores = all_cores)
+```
+
+```{r decision tree}
+# recipe
+top_10 <- whg_merged_data_v3 |> 
+  select(leaid,
+         lr_all_ols_whg,
+         percent_black,
+         pct_students_ooss_single_white,
+         pct_students_ooss_multiple_white,
+         percent_ell,
+         student_teacher_ratio,
+         percent_ecd,
+         pct_students_ooss_single_hsp,
+         percent_white,
+         ses_all_bayes,
+         total_enrollment)
+
+dt_recipe <- 
+  recipe(lr_all_ols_whg ~ .,
+         data = whg_merged_data_v3) |> 
+  update_role(leaid, new_role = "ID")
+dt_recipe
+
+# specify algorithm
+dt_spec <- 
+  decision_tree(cost_complexity = tune(),
+                tree_depth = tune(),) |>
+  set_engine("rpart") |>
+  set_mode("regression")
+
+# cross validation
+dt_grid <- 
+  grid_regular(cost_complexity(),
+               tree_depth(),
+               levels = 5) # how can we force it to use all 10 variables?
+dt_grid
+
+data_cv <- 
+  vfold_cv(data_train, v = 5)
+
+# workflow
+dt_wf <- 
+  workflow() |>
+  add_model(dt_spec) |>
+  add_recipe(dt_recipe)
+dt_wf
+
+# train data
+set.seed(1234)
+dt_results <- 
+  dt_wf |>
+  tune_grid(resamples = data_cv,
+            grid = dt_grid)
+dt_results
+
+# results
+dt_results |>
+  collect_metrics()
+
+
+# plot - don't need to run this
+dt_results |>
+  collect_metrics() |>
+  ggplot(aes(x = cost_complexity, 
+             y = mean, 
+             color = factor(tree_depth))) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ .metric, scales = "free", nrow = 2) +
+  scale_x_log10(labels = scales::label_number())
+
+# final model
+best_tree <- 
+  dt_results %>%
+  select_best("rmse")
+best_tree 
+
+final_wf <- 
+  dt_wf %>% 
+  finalize_workflow(best_tree)
+final_wf
+
+final_tree_train <- 
+  final_wf %>%
+  fit(data = data_train) 
+final_tree_train
+
+
+final_tree_train %>%
+  extract_fit_engine() %>%
+  rpart.plot()
+
+
+
+# ignore below code for now
+count(data_train, lr_all_ols_whg)
+
+ggplot(data = data_train, 
+       aes(x = RelativeSize, 
+           y = lr_all_ols_whg)) +
+  geom_count(aes(color = RelativeSize >= 0.2645),
+             position = position_jitter(width = 0, 
+                                        height = 0.1), 
+             alpha = 0.5) +
+  geom_vline(xintercept = 0.2645, 
+             color = "red", 
+             lty = 2) 
+
+# final tree
+final_tree_train_fit <- 
+  final_tree_train |>
+  extract_fit_parsnip()
+
+
+rpart.plot(final_tree_train_fit$fit, extra = 4, roundint = FALSE)
+
+vip(final_tree_train_fit)
+
+# evaluate fit
+final_fit <- 
+  final_wf |>
+  last_fit(data_split) 
+final_fit
+
+final_fit |>
+  collect_metrics()
+
+final_fit |>
+  collect_predictions() |>
+  conf_mat(truth = lr_all_ols_whg,            
+           estimate = .pred_class) |> # fix this
+  autoplot(type = "mosaic")
+
+final_fit |>
+  collect_predictions() |>
+  roc_curve(lr_all_ols_whg, 
+            .pred_Yes,  
+            event_level = "second") |>
+  autoplot()
+
+```
+
+## Black - white Learning Rate Gap Model 
+
+```{r dataset wbg}
+
+wbg_merged_data_v3 <- merged_data_v3 |>
+  filter(outlier == 0) |> 
+  select(lr_all_ols_wbg, leaid,
+           student_teacher_ratio,
+           per_pupil_exp,
+           percent_urban,
+           percent_suburb,
+           percent_town,
+           percent_rural,
+           percent_city_large,
+           percent_city_midsize,
+           percent_city_small,
+           percent_suburb_large,
+           percent_suburb_midsize,
+           percent_suburb_small,
+           percent_town_fringe,
+           percent_town_distant,
+           percent_town_remote,
+           percent_rural_fringe,
+           percent_rural_distant,
+           percent_rural_remote,
+           percent_native_american,
+           percent_asian,
+           percent_hispanic,
+           percent_black,
+           percent_white,
+           percent_ecd,
+           percent_ell,
+           percent_sped,
+           total_enrollment,
+           #ses_black_bayes,
+           #ses_hsp_bayes,
+           #ses_white_bayes,
+           diffexpecd_blkwht,
+           diffexpecd_hspwht,
+           diffexpmin2_blkwht,
+           diffexpmin2_hspwht,
+           #sesavgall,
+           #diffexpmin2_asnwht,
+           #diffexpmin2_namwht,
+           ses_all_bayes,
+         pct_stu_iss_black,
+         pct_students_ooss_single_black,
+         pct_students_ooss_multiple_black,
+         pct_expulsions_no_ed_serv_black,
+         pct_expulsions_with_ed_black,
+         pct_expulsions_no_tol_black,
+         pct_students_arrested_black,
+         pct_students_ooss_single_hsp,
+         pct_students_ooss_multiple_hsp,
+         pct_expulsions_no_ed_serv_hsp,
+         #pct_expulsions_with_ed_serv_hsp,
+         pct_expulsions_with_ed_hsp,
+         pct_expulsions_no_tol_hsp,
+         pct_students_arrested_hsp,
+         pct_students_ooss_single_white,
+         pct_students_ooss_multiple_white,
+         #pct_expulsions_no_ed_serv_white,
+         pct_expulsions_with_ed_white,
+         pct_expulsions_no_tol_white,
+         pct_students_arrested_white) |> 
+  drop_na()
+
+
+```
+
+```{r split wbg}
+
+set.seed(1234)
+data_split <- 
+  initial_split(wbg_merged_data_v3, 
+                prop = .8, 
+                strata = lr_all_ols_wbg)
+
+data_train <- 
+  training(data_split)
+
+data_test <-
+  testing(data_split)
+```
+
+```{r specify recipe wbg}
+
+# specify recipe
+data_recipe <- 
+  recipe(lr_all_ols_wbg ~ .,
+         data = data_train) |> 
+  update_role(leaid, new_role = "ID")
+data_recipe
+```
+
+```{r random forest wbg}
+
+ref_spec <- 
+  rand_forest(mtry = tune(),
+              trees = tune(),
+              min_n = 10) |>
+  set_mode("regression") |>
+  set_engine("ranger", 
+             importance = "impurity")
+
+```
+
+```{r cv wbg}
+rf_grid <- grid_regular(mtry(range = c(1, 50)), # n predictors
+                        trees(range = c(5, 200)),
+                        levels = c(50, 5))
+rf_grid
+
+data_cv <- 
+  vfold_cv(data_train, v = 5)
+
+```
+
+```{r rf workflow wbg}
+
+rf_wf <-workflow() |> 
+  add_model(ref_spec) |> 
+  add_recipe(data_recipe)
+```
+
+```{r rf train wbg}
+
+all_cores <- parallel::detectCores(logical = FALSE)
+registerDoParallel(cores = all_cores)
+set.seed(1234)
+
+rf_results <-
+  rf_wf |> 
+  tune_grid(resamples = data_cv,
+            grid = rf_grid)
+
+rf_results
+beep("mario")
+```
+
+```{r rf plot wbg}
+
+tree_cols <- brewer.pal(6, "Blues")[2:6]
+
+rf_results |>
+  collect_metrics() |>
+  filter(.metric == "rmse") |>
+  ggplot(aes(x = mtry, 
+             y = mean, 
+             color =  factor(trees))) +
+  geom_line() +
+  geom_point() +
+  labs(y = "rmse") +
+  scale_color_manual(values = tree_cols)
+```
+
+```{r rf best model wbg}
+
+best_forest <-
+  rf_results |>
+  select_best("rmse")
+
+best_forest
+
+final_rf_wf <-
+  rf_wf |>
+  finalize_workflow(best_forest)
+
+final_rf_wf
+
+```
+
+```{r rf final model wbg}
+
+final_rf_train <-
+  final_rf_wf |> 
+  fit(data = data_train)
+
+final_rf_train
+```
+
+```{r importance plot wbg}
+
+final_rf_train_fit <-
+  final_rf_train |>
+  extract_fit_parsnip()
+final_rf_train_fit
+
+rfvip <- vip(final_rf_train_fit) + ggtitle("Random Forest")
+rfvip
+```
+
+```{r eval wbg}
+final_rf_fit <- 
+  final_rf_wf |> 
+  last_fit(data_split) 
+final_rf_fit
+
+final_rf_fit |> 
+  collect_metrics()
+
+#these two aren't working bc pred_class
+final_rf_fit |> 
+  collect_predictions() |> 
+  conf_mat(truth = lr_all_ols_wbg,            
+           estimate = .pred_class) |>  # change this
+  autoplot(type = "mosaic")
+
+# change this
+final_rf_fit |> 
+  collect_predictions() |> 
+  roc_curve(AtRisk, .pred_Yes,  event_level = "second") |>  
+  autoplot()
+
+```
+
+```{r decision tree wbg}
+
+top_10 <- wbg_merged_data_v3 |> 
+  select(leaid,
+         lr_all_ols_wbg,
+         percent_black,
+         ses_all_bayes,
+         percent_white,
+         percent_sped,
+         percent_native_american,
+         student_teacher_ratio,
+         pct_students_ooss_single_black,
+         per_pupil_exp,
+         percent_asian,
+         percent_hispanic)
+
+dt_recipe <- 
+  recipe(lr_all_ols_wbg ~ .,
+         data = top_10) |> 
+  update_role(leaid, new_role = "ID")
+dt_recipe
+
+# specify algorithm
+dt_spec <- 
+  decision_tree(cost_complexity = tune(),
+                tree_depth = tune(),) |>
+  set_engine("rpart") |>
+  set_mode("regression")
+
+# cross validation
+dt_grid <- 
+  grid_regular(cost_complexity(),
+               tree_depth(),
+               levels = 5) # how can we force it to use all 10 variables?
+dt_grid
+
+data_cv <- 
+  vfold_cv(data_train, v = 5)
+
+# workflow
+dt_wf <- 
+  workflow() |>
+  add_model(dt_spec) |>
+  add_recipe(dt_recipe)
+dt_wf
+
+# train data
+set.seed(1234)
+dt_results <- 
+  dt_wf |>
+  tune_grid(resamples = data_cv,
+            grid = dt_grid)
+dt_results
+
+# results
+dt_results |>
+  collect_metrics()
+
+
+# plot - don't need to run this
+dt_results |>
+  collect_metrics() |>
+  ggplot(aes(x = cost_complexity, 
+             y = mean, 
+             color = factor(tree_depth))) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ .metric, scales = "free", nrow = 2) +
+  scale_x_log10(labels = scales::label_number())
+
+# final model
+best_tree <- 
+  dt_results %>%
+  select_best("rmse")
+best_tree 
+
+final_wf <- 
+  dt_wf %>% 
+  finalize_workflow(best_tree)
+final_wf
+
+final_tree_train <- 
+  final_wf %>%
+  fit(data = data_train) 
+final_tree_train
+
+
+final_tree_train %>%
+  extract_fit_engine() %>%
+  rpart.plot()
+```
+
+## Economically Disadvantaged - Non Economically Disadvantaged Learning Rate Gap Model 
+#lr_all_ols_neg this is the variable we want 
+```{r dataset neg}
+
+neg_merged_data_v3 <- merged_data_v3 |>
+  filter(outlier == 0) |> 
+  select(lr_all_ols_neg, leaid,
+           student_teacher_ratio,
+           per_pupil_exp,
+           percent_urban,
+           percent_suburb,
+           percent_town,
+           percent_rural,
+           percent_city_large,
+           percent_city_midsize,
+           percent_city_small,
+           percent_suburb_large,
+           percent_suburb_midsize,
+           percent_suburb_small,
+           percent_town_fringe,
+           percent_town_distant,
+           percent_town_remote,
+           percent_rural_fringe,
+           percent_rural_distant,
+           percent_rural_remote,
+           percent_native_american,
+           percent_asian,
+           percent_hispanic,
+           percent_black,
+           percent_white,
+           percent_ecd,
+           percent_ell,
+           percent_sped,
+           total_enrollment,
+           #ses_black_bayes,
+           #ses_hsp_bayes,
+           #ses_white_bayes,
+           diffexpecd_blkwht,
+           diffexpecd_hspwht,
+           diffexpmin2_blkwht,
+           diffexpmin2_hspwht,
+           #sesavgall,
+           #diffexpmin2_asnwht,
+           #diffexpmin2_namwht,
+           ses_all_bayes,
+         pct_stu_iss_black,
+         pct_students_ooss_single_black,
+         pct_students_ooss_multiple_black,
+         pct_expulsions_no_ed_serv_black,
+         pct_expulsions_with_ed_black,
+         pct_expulsions_no_tol_black,
+         pct_students_arrested_black,
+         pct_students_ooss_single_hsp,
+         pct_students_ooss_multiple_hsp,
+         pct_expulsions_no_ed_serv_hsp,
+         #pct_expulsions_with_ed_serv_hsp,
+         pct_expulsions_with_ed_hsp,
+         pct_expulsions_no_tol_hsp,
+         pct_students_arrested_hsp,
+         pct_students_ooss_single_white,
+         pct_students_ooss_multiple_white,
+         #pct_expulsions_no_ed_serv_white,
+         pct_expulsions_with_ed_white,
+         pct_expulsions_no_tol_white,
+         pct_students_arrested_white) |> 
+  drop_na()
+
+
+```
+
+```{r split neg}
+
+set.seed(1234)
+data_split <- 
+  initial_split(neg_merged_data_v3, 
+                prop = .8, 
+                strata = lr_all_ols_neg)
+
+data_train <- 
+  training(data_split)
+
+data_test <-
+  testing(data_split)
+```
+
+```{r specify recipe neg}
+
+# specify recipe
+data_recipe <- 
+  recipe(lr_all_ols_neg ~ .,
+         data = data_train) |> 
+  update_role(leaid, new_role = "ID")
+data_recipe
+```
+
+```{r random forest neg}
+
+ref_spec <- 
+  rand_forest(mtry = tune(),
+              trees = tune(),
+              min_n = 10) |>
+  set_mode("regression") |>
+  set_engine("ranger", 
+             importance = "impurity")
+
+```
+
+```{r cv neg}
+rf_grid <- grid_regular(mtry(range = c(1, 50)), # n predictors
+                        trees(range = c(5, 200)),
+                        levels = c(50, 5))
+rf_grid
+
+data_cv <- 
+  vfold_cv(data_train, v = 5)
+
+```
+
+```{r rf workflow neg}
+
+rf_wf <-workflow() |> 
+  add_model(ref_spec) |> 
+  add_recipe(data_recipe)
+```
+
+```{r rf train neg}
+
+all_cores <- parallel::detectCores(logical = FALSE)
+registerDoParallel(cores = all_cores)
+set.seed(1234)
+
+rf_results <-
+  rf_wf |> 
+  tune_grid(resamples = data_cv,
+            grid = rf_grid)
+
+rf_results
+beep("mario")
+```
+
+```{r rf plot neg}
+
+tree_cols <- brewer.pal(6, "Blues")[2:6]
+
+rf_results |>
+  collect_metrics() |>
+  filter(.metric == "rmse") |>
+  ggplot(aes(x = mtry, 
+             y = mean, 
+             color =  factor(trees))) +
+  geom_line() +
+  geom_point() +
+  labs(y = "rmse") +
+  scale_color_manual(values = tree_cols)
+```
+
+```{r rf best model neg}
+
+best_forest <-
+  rf_results |>
+  select_best("rmse")
+
+best_forest
+
+final_rf_wf <-
+  rf_wf |>
+  finalize_workflow(best_forest)
+
+final_rf_wf
+
+```
+
+```{r rf final model neg}
+
+final_rf_train <-
+  final_rf_wf |> 
+  fit(data = data_train)
+
+final_rf_train
+```
+
+```{r importance plot neg}
+
+final_rf_train_fit <-
+  final_rf_train |>
+  extract_fit_parsnip()
+final_rf_train_fit
+
+rfvip <- vip(final_rf_train_fit) + ggtitle("Random Forest")
+rfvip
+```
+
+```{r eval neg}
+final_rf_fit <- 
+  final_rf_wf |> 
+  last_fit(data_split) 
+final_rf_fit
+
+final_rf_fit |> 
+  collect_metrics()
+
+#these two aren't working bc pred_class
+final_rf_fit |> 
+  collect_predictions() |> 
+  conf_mat(truth = lr_all_ols_neg,            
+           estimate = .pred_class) |>  # change this
+  autoplot(type = "mosaic")
+
+# change this
+final_rf_fit |> 
+  collect_predictions() |> 
+  roc_curve(AtRisk, .pred_Yes,  event_level = "second") |>  
+  autoplot()
+
+```
+
+```{r decision tree neg}
+
+top_10_neg <- neg_merged_data_v3 |> 
+  select(leaid,
+         lr_all_ols_neg,
+         percent_black,
+         ses_all_bayes,
+         percent_white,
+         percent_sped,
+         percent_native_american,
+         student_teacher_ratio,
+         pct_students_ooss_single_black,
+         per_pupil_exp,
+         percent_asian,
+         percent_hispanic)
+
+dt_recipe <- 
+  recipe(lr_all_ols_neg ~ .,
+         data = top_10) |> 
+  update_role(leaid, new_role = "ID")
+dt_recipe
+
+# specify algorithm
+dt_spec <- 
+  decision_tree(cost_complexity = tune(),
+                tree_depth = tune(),) |>
+  set_engine("rpart") |>
+  set_mode("regression")
+
+# cross validation
+dt_grid <- 
+  grid_regular(cost_complexity(),
+               tree_depth(),
+               levels = 5) # how can we force it to use all 10 variables?
+dt_grid
+
+data_cv <- 
+  vfold_cv(data_train, v = 5)
+
+# workflow
+dt_wf <- 
+  workflow() |>
+  add_model(dt_spec) |>
+  add_recipe(dt_recipe)
+dt_wf
+
+# train data
+set.seed(1234)
+dt_results <- 
+  dt_wf |>
+  tune_grid(resamples = data_cv,
+            grid = dt_grid)
+dt_results
+
+# results
+dt_results |>
+  collect_metrics()
+
+
+# plot - don't need to run this
+dt_results |>
+  collect_metrics() |>
+  ggplot(aes(x = cost_complexity, 
+             y = mean, 
+             color = factor(tree_depth))) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~ .metric, scales = "free", nrow = 2) +
+  scale_x_log10(labels = scales::label_number())
+
+# final model
+best_tree <- 
+  dt_results %>%
+  select_best("rmse")
+best_tree 
+
+final_wf <- 
+  dt_wf %>% 
+  finalize_workflow(best_tree)
+final_wf
+
+final_tree_train <- 
+  final_wf %>%
+  fit(data = data_train) 
+final_tree_train
+
+
+final_tree_train %>%
+  extract_fit_engine() %>%
+  rpart.plot()
+```
+
+
+# regression
+
+```{r regression}
+
+top_10_neg_reg <- top_10_neg |> 
+  select(-leaid)
+
+reg_model <- lm(lr_all_ols_neg ~ ., data = top_10_neg_reg)
+summary(reg_model)
+
+```
+
+
+
+
+

@@ -1,0 +1,289 @@
+---
+title: "UI_District_Data"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+```{r}
+library(educationdata)
+library(tidyverse)
+library(dplyr)
+```
+
+## Pulling Data
+
+```{r}
+
+# Note: used csv = TRUE to account for random error occurring for certain years. See
+# https://github.com/UrbanInstitute/education-data-package-r/issues/87
+
+# CCD Data
+ccd_directory_data <- get_education_data(level = "school-districts",
+                                    source = "ccd",
+                                    topic = "directory",
+                                    filters = list(year = 2008:2017),
+                                    csv = TRUE)
+
+ccd_finance_data <- get_education_data(level = "school-districts",
+                                    source = "ccd",
+                                    topic = "finance",
+                                    filters = list(year = 2008:2017),
+                                    csv = TRUE)
+
+ccd_school_dir_data <- get_education_data(level = "schools",
+                                          source = "ccd",
+                                          topic = "directory",
+                                          filters = list(year = 2008:2017),
+                                          csv = TRUE)
+
+
+crdc_disc_data <- get_education_data(level = "schools",
+                                source = "crdc",
+                                topic = "discipline",
+                                subtopic = list("disability", "race", "sex"),
+                                csv = TRUE)
+
+crdc_absent_data <- get_education_data(level = "schools",
+                                source = "crdc",
+                                topic = "chronic-absenteeism",
+                                subtopic = list("race", "sex"),
+                                csv = TRUE)
+
+write_csv(ccd_directory_data, "ccd_directory_data.csv")
+write_csv(ccd_finance_data, "ccd_finance_data.csv")
+write_csv(ccd_school_dir_data, "ccd_school_dir_data.csv")
+write_csv(crdc_disc_data, "crdc_disc_data.csv")
+write_csv(crdc_absent_data, "crdc_absent_data.csv")
+```
+
+## Cleaning Data - District
+
+```{r}
+# CCD DIRECTORY DATA
+
+# make NA values and drop 0 for student enrollment and total teachers
+ccd_directory_data_clean <- ccd_directory_data |>
+  select(leaid, year, enrollment, teachers_total_fte) |>
+  mutate(across(c(enrollment:teachers_total_fte),
+                ~na_if(.,-1))) |>
+  mutate(across(c(enrollment:teachers_total_fte),
+                ~na_if(.,-2))) |>
+  mutate(across(c(enrollment:teachers_total_fte),
+                ~na_if(.,-3))) |>
+  mutate(enrollment = na_if(enrollment, -9))
+
+# manually correct NYC student enrollment and teacher count
+ccd_directory_data_clean <- ccd_directory_data_clean |> 
+  mutate(enrollment = case_when(leaid == "3620580" & year == 2008 ~ 2714385,
+                                leaid == "3620580" & year == 2009 ~ 2691267,
+                                leaid == "3620580" & year == 2010 ~ 2692649,
+                                leaid == "3620580" & year == 2011 ~ 2689969,
+                                leaid == "3620580" & year == 2012 ~ 2670548,
+                                leaid == "3620580" & year == 2013 ~ 2656967,
+                                leaid == "3620580" & year == 2014 ~ 2652283,
+                                leaid == "3620580" & year == 2015 ~ 2649039,
+                                leaid == "3620580" & year == 2016 ~ 2640250,
+                                leaid == "3620580" & year == 2017 ~ 2629970,
+                                leaid == "3620580" & year == 2018 ~ 2622879,
+                                TRUE ~ enrollment)) |> 
+  mutate(teachers_total_fte = case_when(leaid == "3620580" & year == 2008 ~ 221514,
+                                        leaid == "3620580" & year == 2009 ~ 223090,
+                                        leaid == "3620580" & year == 2010 ~ 219333,
+                                        leaid == "3620580" & year == 2011 ~ 214189,
+                                        leaid == "3620580" & year == 2012 ~ 209571,
+                                        leaid == "3620580" & year == 2013 ~ 206807,
+                                        leaid == "3620580" & year == 2014 ~ 206059,
+                                        leaid == "3620580" & year == 2015 ~ 207379,
+                                        leaid == "3620580" & year == 2016 ~ 210496,
+                                        leaid == "3620580" & year == 2017 ~ 212296,
+                                        leaid == "3620580" & year == 2018 ~ 198778,
+                                        TRUE ~ teachers_total_fte))
+# check if correct
+ccd_directory_data_clean |> 
+  filter(leaid == "3620580")
+
+# filter out schools with either 0 enrollment or 0 teachers
+ccd_directory_data_clean <- ccd_directory_data_clean |>
+  filter(enrollment != 0, teachers_total_fte != 0)
+
+# create weighted averages
+ccd_staff_enrollment <- ccd_directory_data_clean |>
+  group_by(leaid) |>
+  mutate(total_enrollment = sum(enrollment)) |>
+  mutate(total_teachers = sum(teachers_total_fte)) |>
+  mutate(student_teacher_ratio = (total_enrollment/total_teachers)) |> 
+  ungroup()
+
+ccd_staff_ratio <- ccd_staff_enrollment |>
+  select(leaid, student_teacher_ratio) |>
+  distinct()
+
+write_csv(ccd_staff_ratio, "student_teacher_ratio_v2.csv")
+
+# CCD FINANCE DATA
+ccd_finance_data_clean <- ccd_finance_data |>
+  select(leaid, year, exp_total) |>
+  mutate(exp_total = na_if(exp_total, -1)) |>
+  mutate(exp_total = na_if(exp_total, -2)) |>
+  mutate(exp_total = na_if(exp_total, -3)) |>
+  group_by(leaid) |>
+  mutate(total_exp = sum(exp_total))
+
+ccd_finance <- ccd_finance_data_clean |>
+  select(leaid, total_exp) |>
+  distinct()
+
+# use same enrollment numbers as student-teacher ratio
+ccd_enrollment <- ccd_staff_enrollment |>
+  select(leaid, total_enrollment) |>
+  distinct()
+
+# join total expenditures with total enrollment
+ccd_finance_join <- left_join(ccd_enrollment, ccd_finance)
+
+# create per pupil exp
+ccd_finance_clean <- ccd_finance_join |>
+  mutate(per_pupil_exp = (total_exp/total_enrollment)) |>
+  select(leaid, per_pupil_exp)
+
+# ccd_finance_clean |>
+#   filter(per_pupil_exp < 50000) |>
+#   ggplot() +
+#   geom_histogram(aes(x = per_pupil_exp),
+#                  bins = 100)
+
+# fix vermont values
+ccd_finance_clean <- ccd_finance_clean |> 
+   mutate(per_pupil_exp = case_when(leaid == "5099930" ~ 24597,
+                                    leaid == "5099946" ~ 25037,
+                                    leaid == "5099951" ~ 22049,
+                                    leaid == "5099905" ~ 20596,
+                                    leaid == "5099952" ~ 20815,
+                                    leaid == "5099926" ~ 19086,
+                                    leaid == "5099931" ~ 21166,
+                                    leaid == "5099906" ~ 22024,
+                                 TRUE ~ per_pupil_exp))
+
+# check if correct
+ccd_finance_clean |> 
+  filter(leaid == "5099905")
+
+write_csv(ccd_finance_clean, "per_pupil_spending_v3.csv")
+```
+
+## Cleaning Data - School
+
+```{r}
+# directory data
+ccd_school_dir_clean <- ccd_school_dir_data |>
+  select(leaid, year, title_i_eligible) |>
+  mutate(title_i_eligible = na_if(title_i_eligible, -1)) |>
+  mutate(title_i_eligible = na_if(title_i_eligible, -2)) |>
+  mutate(title_i_eligible = na_if(title_i_eligible, -3))
+
+# title_i 
+ccd_school_dir_clean <- ccd_school_dir_clean |>
+  group_by(leaid) |>
+  mutate(title_i_count = sum(title_i_eligible)) |>
+  mutate(school_count = n()) |>
+  mutate(percent_title_i = (title_i_count/school_count))
+
+ccd_school_dir_clean <- ccd_school_dir_clean |>
+  select(leaid, percent_title_i) |>
+  group_by(leaid) |>
+  distinct()
+
+# discipline data
+crdc_disc_data_clean <- crdc_disc_data |>
+  select(leaid, year, sex, race, disability, lep, students_susp_in_sch,
+         students_susp_out_sch_single, students_susp_out_sch_multiple,
+         expulsions_no_ed_serv, expulsions_with_ed_serv, 
+         expulsions_zero_tolerance, students_arrested) |>
+  drop_na(leaid) |>
+  filter(sex == 99,
+         race == 1 | race == 2 | race == 3,
+         disability == 99,
+         lep == 99) |>
+  mutate(across(c(sex:students_arrested),
+                ~na_if(.,-1))) |>
+  mutate(across(c(sex:students_arrested),
+                ~na_if(.,-2))) |>
+  mutate(across(c(sex:students_arrested),
+                ~na_if(.,-3)))
+
+crdc_disc_data_clean <- crdc_disc_data_clean |>
+  select(-sex, -disability, -lep)
+
+# suspensions
+suspension_data <- crdc_disc_data_clean |>
+  select(leaid, year, race, students_susp_in_sch,
+         students_susp_out_sch_single, students_susp_out_sch_multiple) |>
+  mutate(num_suspensions = rowSums(across(c(students_susp_in_sch:
+                                        students_susp_out_sch_multiple)), na.rm = T))
+
+suspension_data <- suspension_data |>
+  select(leaid, year, race, num_suspensions) |>
+  group_by(leaid, race) |>
+  mutate(total_suspensions = sum(num_suspensions, na.rm = T)) |>
+  select(-year, -num_suspensions) |>
+  distinct()
+
+
+# expulsions
+expulsion_data <- crdc_disc_data_clean |>
+  select(leaid, year, race, expulsions_no_ed_serv, expulsions_with_ed_serv, 
+         expulsions_zero_tolerance) |>
+  mutate(num_expulsions = rowSums(across(c(expulsions_no_ed_serv:
+                                        expulsions_zero_tolerance)), na.rm = T))
+
+expulsion_data <- expulsion_data |>
+  select(leaid, year, race, num_expulsions) |>
+  group_by(leaid, race) |>
+  mutate(total_expulsions = sum(num_expulsions, na.rm = T)) |>
+  select(-year, -num_expulsions) |>
+  distinct()
+
+# arrests
+arrest_data <- crdc_disc_data_clean |>
+  select(leaid, year, race, students_arrested) |>
+  group_by(leaid, race) |>
+  mutate(total_students_arrested = 
+           sum(students_arrested, na.rm = T)) |>
+  select(-year, -students_arrested) |>
+  distinct()
+  
+
+# absenteeism data
+crdc_absent_data_clean <- crdc_absent_data |>
+  select(leaid, year, sex, race, disability, 
+         lep, students_chronically_absent) |>
+  filter(sex == 99,
+         race == 1 | race == 2 | race == 3,
+         disability == 99,
+         lep == 99) |>
+  mutate(across(c(sex:students_chronically_absent),
+                ~na_if(.,-1))) |>
+  mutate(across(c(sex:students_chronically_absent),
+                ~na_if(.,-2))) |>
+  mutate(across(c(sex:students_chronically_absent),
+                ~na_if(.,-3)))
+
+absenteeism_data <- crdc_absent_data_clean |>
+  select(-sex, -disability, -lep) |>
+  group_by(leaid, race) |>
+  mutate(total_students_chronically_absent = 
+           sum(students_chronically_absent, na.rm = T)) |>
+  select(-year, -students_chronically_absent) |>
+  distinct()
+```
+
+## Joining Data
+
+```{r}
+#district_data <- full_join(ccd_staff_ratio, ccd_finance_clean)
+```
