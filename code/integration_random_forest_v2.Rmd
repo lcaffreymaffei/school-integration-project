@@ -207,7 +207,7 @@ final_rf_train_fit <-
   extract_fit_parsnip()
 final_rf_train_fit
 
-rfvip_whg <- vip(final_rf_train_fit, num_features  = 50) + 
+rfvip_whg <- vip(final_rf_train_fit, num_features  = 50) + # to see all variables, not just top 10
   ggtitle("Variable Importance for White-Hispanic Learning Rate Gap Random Forest")
 rfvip_whg
 ```
@@ -258,7 +258,7 @@ top_10 <- whg_merged_data_v3 |>
 
 dt_recipe <- 
   recipe(lr_all_ols_whg ~ .,
-         data = whg_merged_data_v3) |> 
+         data = top_10) |> 
   update_role(leaid, new_role = "ID")
 dt_recipe
 
