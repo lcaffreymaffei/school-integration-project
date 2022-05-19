@@ -1,0 +1,85 @@
+---
+title: "Regression"
+author: "Laura Hinton"
+date: "5/18/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(haven)
+library(broom)
+library(fastDummies)
+library(stargazer)
+
+data <- read_csv("merged_data_clusters.csv")
+
+```
+
+## Regression with Clusters
+
+```{r select data}
+reg_data <- data |> 
+  select(lr_all_ols_whg,
+         lr_all_ols_wbg,
+         lr_all_ols_neg,
+         cluster_lab) |> 
+  drop_na(cluster_lab)
+
+reg_data <- reg_data |> 
+  dummy_cols("cluster_lab", remove_selected_columns = TRUE)
+
+```
+
+
+```{r whg reg}
+reg_whg <- lm(lr_all_ols_whg ~ cluster_lab_asian_suburb +
+            cluster_lab_low_income_town +
+            cluster_lab_rural_white +
+            cluster_lab_urban_segregated,
+          data = reg_data)
+
+summary(reg_whg)
+```
+
+
+
+```{r wbg reg}
+reg_wbg <- lm(lr_all_ols_wbg ~ cluster_lab_asian_suburb +
+            cluster_lab_low_income_town +
+            cluster_lab_rural_white +
+            cluster_lab_urban_segregated,
+          data = reg_data)
+
+summary(reg_wbg)
+```
+
+
+
+```{r neg reg}
+reg_neg <- lm(lr_all_ols_neg ~ cluster_lab_asian_suburb +
+            cluster_lab_low_income_town +
+            cluster_lab_rural_white +
+            cluster_lab_urban_segregated,
+          data = reg_data)
+
+summary(reg_neg)
+```
+
+
+```{r tables}
+varnames = c("Intercept", "Cluster: Asian Suburb", "Cluster: Low-Income Town", "Cluster: Rural White", "Cluster: Urban Segregated")
+
+stargazer(reg_whg, type = "html", out = "whg_regressiontable.html", title = "White-Hispanic Learning Rate Gaps vs. District Characteristics", covariate.labels = varnames, dep.var.caption = "", dep.var.labels = "", intercept.bottom = FALSE, notes.label = "")
+
+stargazer(reg_wbg, type = "html", out = "wbg_regressiontable.html", title = "White-Black Learning Rate Gaps vs. District Characteristics", covariate.labels = varnames, dep.var.caption = "", dep.var.labels = "", intercept.bottom = FALSE, notes.label = "")
+
+stargazer(reg_neg, type = "html", out = "neg_regressiontable.html", title = "ECD-Non-ECD Learning Rate Gaps vs. District Characteristics", covariate.labels = varnames, dep.var.caption = "", dep.var.labels = "", intercept.bottom = FALSE, notes.label = "")
+```
+
+
+
+
+

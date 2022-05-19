@@ -17,6 +17,143 @@ library(tidyverse)
 library(corrplot)
 ```
 
+## All Districts
+
+```{r}
+merged_data_v3 <- read_csv("merged data v3.csv")
+
+districts <- merged_data_v3 |>
+  filter(outlier == 0) |> 
+  select(leaid,
+         student_teacher_ratio,
+           per_pupil_exp,
+           percent_urban,
+           percent_suburb,
+           percent_town,
+           percent_rural,
+           percent_city_large,
+           percent_city_midsize,
+           percent_city_small,
+           percent_suburb_large,
+           percent_suburb_midsize,
+           percent_suburb_small,
+           percent_town_fringe,
+           percent_town_distant,
+           percent_town_remote,
+           percent_rural_fringe,
+           percent_rural_distant,
+           percent_rural_remote,
+           percent_native_american,
+           percent_asian,
+           percent_hispanic,
+           percent_black,
+           percent_white,
+           percent_ecd,
+           percent_ell,
+           percent_sped,
+           total_enrollment,
+           diffexpecd_blkwht,
+           diffexpecd_hspwht,
+           diffexpmin2_blkwht,
+           diffexpmin2_hspwht,
+           ses_all_bayes,
+         pct_stu_iss_black,
+         pct_students_ooss_single_black,
+         pct_students_ooss_multiple_black,
+         pct_expulsions_no_ed_serv_black,
+         pct_expulsions_with_ed_black,
+         pct_expulsions_no_tol_black,
+         pct_students_arrested_black,
+         pct_students_ooss_single_hsp,
+         pct_students_ooss_multiple_hsp,
+         pct_expulsions_no_ed_serv_hsp,
+         pct_expulsions_with_ed_hsp,
+         pct_expulsions_no_tol_hsp,
+         pct_students_arrested_hsp,
+         pct_students_ooss_single_white,
+         pct_students_ooss_multiple_white,
+         pct_expulsions_with_ed_white,
+         pct_expulsions_no_tol_white,
+         pct_students_arrested_white) |> 
+  drop_na()
+```
+
+```{r scale}
+districts_z <- districts |> 
+  select(-leaid) |> # remove leaid from clustering
+  mutate(across(everything(), scale))
+
+summary(districts_z)
+```
+
+```{r k}
+set.seed(1234)
+
+tibble(k = 1:15) |>
+  mutate(kmeansmod = map(k, ~ kmeans(districts_z, 
+                             .x,
+                             nstart = 25,
+                             iter.max = 20)),
+         glanced = map(kmeansmod, glance)) |>
+  unnest(cols = c(glanced)) |>
+  ggplot(aes(k, tot.withinss)) +
+  geom_line() +
+  geom_point()
+```
+
+```{r kmeans}
+district_clusters <- kmeans(districts_z, 
+                        centers = 4, 
+                        nstart = 25,
+                        iter.max = 20)
+
+district_clusters
+```
+
+```{r tidy}
+tidy(district_clusters)
+```
+
+```{r plot kmeans vars}
+tidy(district_clusters) |>
+  mutate(cluster = str_c("cluster_", 1:4)) |>
+  pivot_longer(cols = -c(cluster, withinss, size),
+               names_to = "Characteristic",
+               values_to = "Value") |>
+  mutate(importance = Value * Value) |>
+  group_by(cluster) |>
+  slice_max(importance, n = 10) |>
+  ungroup() |>
+  mutate(cluster = as.factor(cluster),
+         Characteristic = reorder_within(Characteristic,
+                                   by = importance,
+                                   within = cluster)) |>
+  ggplot() +
+  geom_col(aes(y = Value, 
+               x = Characteristic,
+               fill = Characteristic)) +
+  facet_wrap(~ cluster, 
+             nrow = 2,
+             scales = "free") + 
+  guides(fill = "none") +
+  scale_x_reordered() +
+  coord_flip()
+```
+
+```{r bind to dataset}
+districts <- mutate(districts, cluster = district_clusters$cluster)
+
+merged_data_clusters <- merged_data_v3 |>
+  left_join(districts) |>
+  mutate(cluster_lab = case_when(cluster == 1 ~ "urban_segregated",
+                                 cluster == 2 ~ "low_income_town",
+                                 cluster == 3 ~ "rural_white",
+                                 cluster == 4 ~ "asian_suburb"))
+
+write_csv(merged_data_clusters, "merged_data_clusters.csv")
+```
+
+
 ## White-Hispanic Gap
 
 ```{r}
@@ -24,8 +161,7 @@ districts <- read_csv("merged data v3.csv")
 
 districts_whg <- districts |>
   filter(outlier == 0) |> 
-  select(lr_all_ols_whg,
-         student_teacher_ratio,
+  select(student_teacher_ratio,
            per_pupil_exp,
            percent_urban,
            percent_suburb,
