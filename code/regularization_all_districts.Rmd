@@ -1,0 +1,626 @@
+---
+title: "regression_regularization_all_districts"
+author: "Lucy Caffrey-Maffei"
+date: "6/2/2022"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(haven)
+library(broom)
+library(fastDummies)
+library(stargazer)
+library(glmnet)
+library(tidymodels)
+
+merged_data <- read_csv("merged data.csv")
+
+```
+
+## Hispanic - White Learning Rate Gap
+
+```{r whg cleaning}
+all_districts <- merged_data |>
+  select(lr_all_ols_whg, student_teacher_ratio,
+                per_pupil_exp,
+                percent_urban,
+                percent_suburb,
+                percent_town,
+                percent_rural,
+                percent_city_large,
+                percent_city_midsize,
+                percent_city_small,
+                percent_suburb_large,
+                percent_suburb_midsize,
+                percent_suburb_small,
+                percent_town_fringe,
+                percent_town_distant,
+                percent_town_remote,
+                percent_rural_fringe,
+                percent_rural_distant,
+                percent_rural_remote,
+                percent_native_american,
+                percent_asian,
+                percent_hispanic,
+                percent_black,
+                percent_white,
+                percent_ecd,
+                percent_ell,
+                percent_sped,
+                total_enrollment,
+                diffexpecd_blkwht,
+                diffexpecd_hspwht,
+                diffexpmin2_blkwht,
+                diffexpmin2_hspwht,
+                ses_all_bayes,
+                pct_stu_iss_black,
+                pct_students_ooss_single_black,
+                pct_students_ooss_multiple_black,
+                pct_expulsions_no_ed_serv_black,
+                pct_expulsions_with_ed_black,
+                pct_expulsions_no_tol_black,
+                pct_students_arrested_black,
+                pct_students_ooss_single_hsp,
+                pct_students_ooss_multiple_hsp,
+                pct_expulsions_no_ed_serv_hsp,
+                pct_expulsions_with_ed_hsp,
+                pct_expulsions_no_tol_hsp,
+                pct_students_arrested_hsp,
+                pct_students_ooss_single_white,
+                pct_students_ooss_multiple_white,
+                pct_expulsions_with_ed_white,
+                pct_expulsions_no_tol_white,
+                pct_students_arrested_white,
+                hsflnfl,
+                hsecdnec,
+                hswhtblk,
+                hswhthsp,
+                rswhtblk,
+                rswhthsp,
+                rsflnfl,
+                rsecdnec) |>
+  na.omit()
+```
+
+```{r whg analysis}
+set.seed(1234)
+
+all_districts_split <- 
+  initial_split(all_districts, 
+                prop = .8,
+                strata = lr_all_ols_whg)
+
+all_districts_train <- training(all_districts_split)
+
+all_districts_test <- testing(all_districts_split)
+
+all_districts_recipe <- 
+  recipe(lr_all_ols_whg ~ ., 
+         data = all_districts_train)
+
+all_districts_recipe |> 
+  prep(training = all_districts_train) |> 
+  bake(new_data = NULL) |> 
+  glimpse()
+
+ridge_spec <- 
+  linear_reg(penalty = 1, mixture = 0) |>
+  set_engine("glmnet") |>
+  set_mode("regression")
+
+ridge_wf <- 
+  workflow() |> 
+  add_model(ridge_spec) |> 
+  add_recipe(all_districts_recipe)
+
+ridge_wf
+
+ridge_fit <- 
+  fit(ridge_wf, 
+      data = all_districts_train)
+
+tidy(ridge_fit)
+
+tidy(ridge_fit) |> 
+  arrange(abs(estimate)) |> 
+  filter(term != "(Intercept)") |> 
+  slice_tail(n = 10) |> 
+  ggplot(aes(x = reorder(term, estimate),
+             y = estimate,
+             fill = estimate > 0)) +
+  geom_col() +
+  coord_flip()
+
+regularization_spec <- 
+  linear_reg(penalty = tune(), mixture = tune()) |>
+  set_engine("glmnet") |> 
+  set_mode("regression")
+
+grid <- 
+  expand_grid(penalty = seq(0, 0.1, by = 0.005), # these values are used often
+              mixture = seq(0, 1, by = 0.2))
+
+all_districts_cv <- 
+  vfold_cv(all_districts_train, v = 5)
+
+all_districts_results <- 
+  tune_grid(regularization_spec,
+            preprocessor = all_districts_recipe,
+            grid = grid,
+            resamples = all_districts_cv)
+
+all_districts_results |> 
+  collect_metrics()  |> 
+  filter(.metric == "rmse") |>
+  ggplot(aes(x = penalty, y = mean, color = as.factor(mixture))) + 
+  geom_point() + 
+  geom_line() + 
+  ylab("RMSE")
+
+all_districts_best_model <- 
+  all_districts_results |>   
+  select_best(metric = "rmse")
+
+all_districts_best_model
+
+all_districts_final_spec <- 
+  linear_reg(penalty = 0.025, mixture = 0) |> 
+  set_engine("glmnet") |> 
+  set_mode("regression")
+
+all_districts_final_wf <- 
+  workflow()  |> 
+  add_model(all_districts_final_spec)  |> 
+  add_recipe(all_districts_recipe)
+
+all_districts_final_wf
+
+all_districts_final_fit <- 
+  all_districts_final_wf |>  
+  fit(data = all_districts_train)
+
+all_districts_variables <- tidy(all_districts_final_fit)
+
+tidy(all_districts_final_fit) |> 
+  arrange(abs(estimate))|> 
+  slice_tail(n = 10) |> 
+  ggplot(aes(x = term,
+             y = estimate)) +
+  geom_col() +
+  coord_flip()
+
+#just segregation measures
+
+seg_measures_final_fit <- tidy(all_districts_final_fit) |>
+  filter(term == "hsflnfl" | term == "hsecdnec" | term == "hswhtblk" | term == "hswhthsp" | term == "rswhtblk" | term == "rswhthsp" | term == "rsflnfl" | term == "rsecdnec" | term == "diffexpecd_blkwht" | term == "diffexpecd_hspwht" | term == "diffexpmin2_blkwht" | term == "diffexpmin2_hspwht")
+  
+  
+seg_measures_final_fit |>
+  arrange(abs(estimate))|> 
+  ggplot(aes(x = term,
+             y = estimate,
+             fill = estimate > 0)) +
+  geom_col() +
+  coord_flip() +
+  theme_light() +
+    xlab("Coefficient Estimate") +
+    ylab("Segregation Measure") +
+  ggtitle("Hispanic - White Learning Rate Gap\nby District Segregation Measures") +
+  theme(plot.title = element_text(hjust = 1, size = 15),
+        axis.text = element_text(size=10),
+        axis.title = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        legend.position="none") +
+    scale_x_discrete(breaks=c("diffexpecd_blkwht", "diffexpecd_hspwht", "diffexpmin2_blkwht", "diffexpmin2_hspwht",
+"hsflnfl", "hsecdnec", "hswhtblk", "hswhthsp", 
+"rswhtblk", "rswhthsp", "rsflnfl", "rsecdnec"),
+                      labels=c("Black/White Exposure to School Poverty", "Hispanic/White Exposure to School Poverty", "Black/White Exposure to Racial Minority Schools", "Hispanic/ White Exposure to Racial Minority", "Information Index Between Schools: Free Lunch/Non-Free Lunch", "Information Index Between Schools: ECD - Non-ECD", "Information Index Between Schools: White/Black", "Information Index Between Schools: White/Hispanic", "Relative Diversity Index Between Schools: White/Black", "Relative Diversity Index Between Schools: White/Hispanic", "Relative Diversity Index Between Schools: Free Lunch/Non-Free Lunch", "Relative Diversity Index Between Schools: ECD/Non-ECD"))
+```
+
+## Black - White Learning Rate Gap
+
+```{r}
+all_districts <- merged_data |>
+  select(lr_all_ols_wbg, student_teacher_ratio,
+                per_pupil_exp,
+                percent_urban,
+                percent_suburb,
+                percent_town,
+                percent_rural,
+                percent_city_large,
+                percent_city_midsize,
+                percent_city_small,
+                percent_suburb_large,
+                percent_suburb_midsize,
+                percent_suburb_small,
+                percent_town_fringe,
+                percent_town_distant,
+                percent_town_remote,
+                percent_rural_fringe,
+                percent_rural_distant,
+                percent_rural_remote,
+                percent_native_american,
+                percent_asian,
+                percent_hispanic,
+                percent_black,
+                percent_white,
+                percent_ecd,
+                percent_ell,
+                percent_sped,
+                total_enrollment,
+                diffexpecd_blkwht,
+                diffexpecd_hspwht,
+                diffexpmin2_blkwht,
+                diffexpmin2_hspwht,
+                ses_all_bayes,
+                pct_stu_iss_black,
+                pct_students_ooss_single_black,
+                pct_students_ooss_multiple_black,
+                pct_expulsions_no_ed_serv_black,
+                pct_expulsions_with_ed_black,
+                pct_expulsions_no_tol_black,
+                pct_students_arrested_black,
+                pct_students_ooss_single_hsp,
+                pct_students_ooss_multiple_hsp,
+                pct_expulsions_no_ed_serv_hsp,
+                pct_expulsions_with_ed_hsp,
+                pct_expulsions_no_tol_hsp,
+                pct_students_arrested_hsp,
+                pct_students_ooss_single_white,
+                pct_students_ooss_multiple_white,
+                pct_expulsions_with_ed_white,
+                pct_expulsions_no_tol_white,
+                pct_students_arrested_white,
+                hsflnfl,
+                hsecdnec,
+                hswhtblk,
+                hswhthsp,
+                rswhtblk,
+                rswhthsp,
+                rsflnfl,
+                rsecdnec) |>
+  na.omit()
+```
+
+```{r wbg analysis}
+
+set.seed(1234)
+
+all_districts_split <- 
+  initial_split(all_districts, 
+                prop = .8,
+                strata = lr_all_ols_wbg)
+
+all_districts_train <- training(all_districts_split)
+
+all_districts_test <- testing(all_districts_split)
+
+all_districts_recipe <- 
+  recipe(lr_all_ols_wbg ~ ., 
+         data = all_districts_train)
+
+all_districts_recipe |> 
+  prep(training = all_districts_train) |> 
+  bake(new_data = NULL) |> 
+  glimpse()
+
+ridge_spec <- 
+  linear_reg(penalty = 1, mixture = 0) |>
+  set_engine("glmnet") |>
+  set_mode("regression")
+
+ridge_wf <- 
+  workflow() |> 
+  add_model(ridge_spec) |> 
+  add_recipe(all_districts_recipe)
+
+ridge_wf
+
+ridge_fit <- 
+  fit(ridge_wf, 
+      data = all_districts_train)
+
+tidy(ridge_fit)
+
+tidy(ridge_fit) |> 
+  arrange(abs(estimate)) |> 
+  filter(term != "(Intercept)") |> 
+  slice_tail(n = 10) |> 
+  ggplot(aes(x = reorder(term, estimate),
+             y = estimate,
+             fill = estimate > 0)) +
+  geom_col() +
+  coord_flip()
+
+regularization_spec <- 
+  linear_reg(penalty = tune(), mixture = tune()) |>
+  set_engine("glmnet") |> 
+  set_mode("regression")
+
+grid <- 
+  expand_grid(penalty = seq(0, 0.1, by = 0.005), # these values are used often
+              mixture = seq(0, 1, by = 0.2))
+
+all_districts_cv <- 
+  vfold_cv(all_districts_train, v = 5)
+
+all_districts_results <- 
+  tune_grid(regularization_spec,
+            preprocessor = all_districts_recipe,
+            grid = grid,
+            resamples = all_districts_cv)
+
+all_districts_results |> 
+  collect_metrics()  |> 
+  filter(.metric == "rmse") |>
+  ggplot(aes(x = penalty, y = mean, color = as.factor(mixture))) + 
+  geom_point() + 
+  geom_line() + 
+  ylab("RMSE")
+
+all_districts_best_model <- 
+  all_districts_results |>   
+  select_best(metric = "rmse")
+
+all_districts_best_model
+
+all_districts_final_spec <- 
+  linear_reg(penalty = 0.03, mixture = 0) |> 
+  set_engine("glmnet") |> 
+  set_mode("regression")
+
+all_districts_final_wf <- 
+  workflow()  |> 
+  add_model(all_districts_final_spec)  |> 
+  add_recipe(all_districts_recipe)
+
+all_districts_final_wf
+
+all_districts_final_fit <- 
+  all_districts_final_wf |>  
+  fit(data = all_districts_train)
+
+all_districts_variables <- tidy(all_districts_final_fit)
+
+tidy(all_districts_final_fit) |> 
+  arrange(abs(estimate))|> 
+  slice_tail(n = 10) |> 
+  ggplot(aes(x = term,
+             y = estimate)) +
+  geom_col() +
+  coord_flip()
+
+#just segregation measures
+
+seg_measures_final_fit <- tidy(all_districts_final_fit) |>
+  filter(term == "hsflnfl" | term == "hsecdnec" | term == "hswhtblk" | term == "hswhthsp" | term == "rswhtblk" | term == "rswhthsp" | term == "rsflnfl" | term == "rsecdnec" | term == "diffexpecd_blkwht" | term == "diffexpecd_hspwht" | term == "diffexpmin2_blkwht" | term == "diffexpmin2_hspwht")
+  
+  
+seg_measures_final_fit |>
+  arrange(abs(estimate))|> 
+  ggplot(aes(x = term,
+             y = estimate,
+             fill = estimate > 0)) +
+  geom_col() +
+  coord_flip() +
+  theme_light() +
+    xlab("Coefficient Estimate") +
+    ylab("Segregation Measure") +
+  ggtitle("Black - White Learning Rate Gap\nLearning Rate Gap by District Segregation Measures") +
+  theme(plot.title = element_text(hjust = 1, size = 15),
+        axis.text = element_text(size=10),
+        axis.title = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        legend.position="none") +
+    scale_x_discrete(breaks=c("diffexpecd_blkwht", "diffexpecd_hspwht", "diffexpmin2_blkwht", "diffexpmin2_hspwht",
+"hsflnfl", "hsecdnec", "hswhtblk", "hswhthsp", 
+"rswhtblk", "rswhthsp", "rsflnfl", "rsecdnec"),
+                      labels=c("Black/White Exposure to School Poverty", "Hispanic/White Exposure to School Poverty", "Black/White Exposure to Racial Minority Schools", "Hispanic/ White Exposure to Racial Minority", "Information Index Between Schools: Free Lunch/Non-Free Lunch", "Information Index Between Schools: ECD - Non-ECD", "Information Index Between Schools: White/Black", "Information Index Between Schools: White/Hispanic", "Relative Diversity Index Between Schools: White/Black", "Relative Diversity Index Between Schools: White/Hispanic", "Relative Diversity Index Between Schools: Free Lunch/Non-Free Lunch", "Relative Diversity Index Between Schools: ECD/Non-ECD"))
+```
+
+## ECD - NECD Learning Rate Gap
+
+```{r}
+all_districts <- merged_data |>
+  select(lr_all_ols_neg, student_teacher_ratio,
+                per_pupil_exp,
+                percent_urban,
+                percent_suburb,
+                percent_town,
+                percent_rural,
+                percent_city_large,
+                percent_city_midsize,
+                percent_city_small,
+                percent_suburb_large,
+                percent_suburb_midsize,
+                percent_suburb_small,
+                percent_town_fringe,
+                percent_town_distant,
+                percent_town_remote,
+                percent_rural_fringe,
+                percent_rural_distant,
+                percent_rural_remote,
+                percent_native_american,
+                percent_asian,
+                percent_hispanic,
+                percent_black,
+                percent_white,
+                percent_ecd,
+                percent_ell,
+                percent_sped,
+                total_enrollment,
+                diffexpecd_blkwht,
+                diffexpecd_hspwht,
+                diffexpmin2_blkwht,
+                diffexpmin2_hspwht,
+                ses_all_bayes,
+                pct_stu_iss_black,
+                pct_students_ooss_single_black,
+                pct_students_ooss_multiple_black,
+                pct_expulsions_no_ed_serv_black,
+                pct_expulsions_with_ed_black,
+                pct_expulsions_no_tol_black,
+                pct_students_arrested_black,
+                pct_students_ooss_single_hsp,
+                pct_students_ooss_multiple_hsp,
+                pct_expulsions_no_ed_serv_hsp,
+                pct_expulsions_with_ed_hsp,
+                pct_expulsions_no_tol_hsp,
+                pct_students_arrested_hsp,
+                pct_students_ooss_single_white,
+                pct_students_ooss_multiple_white,
+                pct_expulsions_with_ed_white,
+                pct_expulsions_no_tol_white,
+                pct_students_arrested_white,
+                hsflnfl,
+                hsecdnec,
+                hswhtblk,
+                hswhthsp,
+                rswhtblk,
+                rswhthsp,
+                rsflnfl,
+                rsecdnec) |>
+  na.omit()
+```
+
+```{r wbg analysis}
+
+set.seed(1234)
+
+all_districts_split <- 
+  initial_split(all_districts, 
+                prop = .8,
+                strata = lr_all_ols_neg)
+
+all_districts_train <- training(all_districts_split)
+
+all_districts_test <- testing(all_districts_split)
+
+all_districts_recipe <- 
+  recipe(lr_all_ols_neg ~ ., 
+         data = all_districts_train)
+
+all_districts_recipe |> 
+  prep(training = all_districts_train) |> 
+  bake(new_data = NULL) |> 
+  glimpse()
+
+ridge_spec <- 
+  linear_reg(penalty = 1, mixture = 0) |>
+  set_engine("glmnet") |>
+  set_mode("regression")
+
+ridge_wf <- 
+  workflow() |> 
+  add_model(ridge_spec) |> 
+  add_recipe(all_districts_recipe)
+
+ridge_wf
+
+ridge_fit <- 
+  fit(ridge_wf, 
+      data = all_districts_train)
+
+tidy(ridge_fit)
+
+tidy(ridge_fit) |> 
+  arrange(abs(estimate)) |> 
+  filter(term != "(Intercept)") |> 
+  slice_tail(n = 10) |> 
+  ggplot(aes(x = reorder(term, estimate),
+             y = estimate,
+             fill = estimate > 0)) +
+  geom_col() +
+  coord_flip()
+
+regularization_spec <- 
+  linear_reg(penalty = tune(), mixture = tune()) |>
+  set_engine("glmnet") |> 
+  set_mode("regression")
+
+grid <- 
+  expand_grid(penalty = seq(0, 0.1, by = 0.005), # these values are used often
+              mixture = seq(0, 1, by = 0.2))
+
+all_districts_cv <- 
+  vfold_cv(all_districts_train, v = 5)
+
+all_districts_results <- 
+  tune_grid(regularization_spec,
+            preprocessor = all_districts_recipe,
+            grid = grid,
+            resamples = all_districts_cv)
+
+all_districts_results |> 
+  collect_metrics()  |> 
+  filter(.metric == "rmse") |>
+  ggplot(aes(x = penalty, y = mean, color = as.factor(mixture))) + 
+  geom_point() + 
+  geom_line() + 
+  ylab("RMSE")
+
+all_districts_best_model <- 
+  all_districts_results |>   
+  select_best(metric = "rmse")
+
+all_districts_best_model
+
+all_districts_final_spec <- 
+  linear_reg(penalty = 0.025, mixture = 0) |> 
+  set_engine("glmnet") |> 
+  set_mode("regression")
+
+all_districts_final_wf <- 
+  workflow()  |> 
+  add_model(all_districts_final_spec)  |> 
+  add_recipe(all_districts_recipe)
+
+all_districts_final_wf
+
+all_districts_final_fit <- 
+  all_districts_final_wf |>  
+  fit(data = all_districts_train)
+
+all_districts_variables <- tidy(all_districts_final_fit)
+
+#top 10 most important variables
+tidy(all_districts_final_fit) |> 
+  arrange(abs(estimate))|> 
+  slice_tail(n = 10) |> 
+  ggplot(aes(x = term,
+             y = estimate)) +
+  geom_col() +
+  coord_flip()
+
+#only segregation variables
+
+seg_measures_final_fit <- tidy(all_districts_final_fit) |>
+  filter(term == "hsflnfl" | term == "hsecdnec" | term == "hswhtblk" | term == "hswhthsp" | term == "rswhtblk" | term == "rswhthsp" | term == "rsflnfl" | term == "rsecdnec" | term == "diffexpecd_blkwht" | term == "diffexpecd_hspwht" | term == "diffexpmin2_blkwht" | term == "diffexpmin2_hspwht")
+  
+  
+seg_measures_final_fit |>
+  arrange(abs(estimate))|> 
+  ggplot(aes(x = term,
+             y = estimate,
+             fill = estimate > 0)) +
+  geom_col() +
+  coord_flip() +
+  theme_light() +
+    xlab("Coefficient Estimate") +
+    ylab("Segregation Measure") +
+  ggtitle("Economically Disadvantaged - Non-Economically Disadvantaged \n Learning Rate Gap by District Segregation Measures") +
+  theme(plot.title = element_text(hjust = 1, size = 15),
+        axis.text = element_text(size=10),
+        axis.title = element_text(size = 12),
+        legend.text = element_text(size = 12),
+        legend.position="none") +
+    scale_x_discrete(breaks=c("diffexpecd_blkwht", "diffexpecd_hspwht", "diffexpmin2_blkwht", "diffexpmin2_hspwht",
+"hsflnfl", "hsecdnec", "hswhtblk", "hswhthsp", 
+"rswhtblk", "rswhthsp", "rsflnfl", "rsecdnec"),
+                      labels=c("Black/White Exposure to School Poverty", "Hispanic/White Exposure to School Poverty", "Black/White Exposure to Racial Minority Schools", "Hispanic/ White Exposure to Racial Minority", "Information Index Between Schools: Free Lunch/Non-Free Lunch", "Information Index Between Schools: ECD - Non-ECD", "Information Index Between Schools: White/Black", "Information Index Between Schools: White/Hispanic", "Relative Diversity Index Between Schools: White/Black", "Relative Diversity Index Between Schools: White/Hispanic", "Relative Diversity Index Between Schools: Free Lunch/Non-Free Lunch", "Relative Diversity Index Between Schools: ECD/Non-ECD"))
+```
