@@ -1,25 +1,33 @@
 
-<table style="text-align:center"><caption><strong>White-Black Learning Rate Gaps vs. District Characteristics</strong></caption>
-<tr><td colspan="2" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"></td><td></td></tr>
-<tr><td colspan="2" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Intercept</td><td>0.006<sup>***</sup></td></tr>
-<tr><td style="text-align:left"></td><td>(0.001)</td></tr>
-<tr><td style="text-align:left"></td><td></td></tr>
-<tr><td style="text-align:left">Cluster: Asian Suburb</td><td>-0.007<sup>***</sup></td></tr>
-<tr><td style="text-align:left"></td><td>(0.001)</td></tr>
-<tr><td style="text-align:left"></td><td></td></tr>
-<tr><td style="text-align:left">Cluster: Low-Income Town</td><td>-0.005<sup>***</sup></td></tr>
-<tr><td style="text-align:left"></td><td>(0.002)</td></tr>
-<tr><td style="text-align:left"></td><td></td></tr>
-<tr><td style="text-align:left">Cluster: Rural White</td><td>-0.011<sup>***</sup></td></tr>
-<tr><td style="text-align:left"></td><td>(0.002)</td></tr>
-<tr><td style="text-align:left"></td><td></td></tr>
-<tr><td style="text-align:left">Cluster: Urban Segregated</td><td></td></tr>
-<tr><td style="text-align:left"></td><td></td></tr>
-<tr><td style="text-align:left"></td><td></td></tr>
-<tr><td colspan="2" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Observations</td><td>2,955</td></tr>
-<tr><td style="text-align:left">R<sup>2</sup></td><td>0.015</td></tr>
-<tr><td style="text-align:left">Adjusted R<sup>2</sup></td><td>0.014</td></tr>
-<tr><td style="text-align:left">Residual Std. Error</td><td>0.028 (df = 2951)</td></tr>
-<tr><td style="text-align:left">F Statistic</td><td>15.227<sup>***</sup> (df = 3; 2951)</td></tr>
-<tr><td colspan="2" style="border-bottom: 1px solid black"></td></tr><tr><td colspan="2" style="text-align:right"><sup>*</sup>p<0.1; <sup>**</sup>p<0.05; <sup>***</sup>p<0.01</td></tr>
+<table style="text-align:center"><caption><strong>White-Black Learning Rate Gaps by Segregation Measures</strong></caption>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left"></td><td colspan="4"></td></tr>
+<tr><td style="text-align:left"></td><td>Asian Suburb</td><td>Rural White</td><td>Urban POC</td><td>Low-Income Town</td></tr>
+<tr><td style="text-align:left"></td><td>(1)</td><td>(2)</td><td>(3)</td><td>(4)</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Intercept</td><td>0.016</td><td>-0.022</td><td>0.022</td><td>0.010</td></tr>
+<tr><td style="text-align:left"></td><td>(0.010)</td><td>(0.018)</td><td>(0.014)</td><td>(0.015)</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">Student-Teacher Ratio</td><td>-0.001<sup>**</sup></td><td>0.001</td><td>-0.001</td><td>-0.001</td></tr>
+<tr><td style="text-align:left"></td><td>(0.0005)</td><td>(0.001)</td><td>(0.001)</td><td>(0.001)</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">Per-Pupil Expenditures</td><td>-0.00000</td><td>0.00000</td><td>-0.00000</td><td>0.00000</td></tr>
+<tr><td style="text-align:left"></td><td>(0.00000)</td><td>(0.00000)</td><td>(0.00000)</td><td>(0.00000)</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">Black-White Difference in Exposure to ECD Students</td><td>0.030</td><td>0.062</td><td>0.064<sup>***</sup></td><td>0.098<sup>*</sup></td></tr>
+<tr><td style="text-align:left"></td><td>(0.034)</td><td>(0.065)</td><td>(0.022)</td><td>(0.055)</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">Black-White Difference in Exposure to Minority Students</td><td>-0.012</td><td>0.110</td><td>0.061<sup>*</sup></td><td>0.089</td></tr>
+<tr><td style="text-align:left"></td><td>(0.044)</td><td>(0.121)</td><td>(0.032)</td><td>(0.089)</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">Relative Diversity Index Between Schools: White/Black</td><td>-0.063</td><td>-0.183<sup>*</sup></td><td>-0.109<sup>***</sup></td><td>-0.125</td></tr>
+<tr><td style="text-align:left"></td><td>(0.042)</td><td>(0.098)</td><td>(0.042)</td><td>(0.080)</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td><td></td></tr>
+<tr><td style="text-align:left">Information Index Between Schools: White/Black</td><td>0.065</td><td>0.090</td><td>0.045</td><td>0.011</td></tr>
+<tr><td style="text-align:left"></td><td>(0.042)</td><td>(0.057)</td><td>(0.042)</td><td>(0.057)</td></tr>
+<tr><td style="text-align:left"></td><td></td><td></td><td></td><td></td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td style="text-align:left">Observations</td><td>1,123</td><td>293</td><td>433</td><td>550</td></tr>
+<tr><td style="text-align:left">R<sup>2</sup></td><td>0.010</td><td>0.036</td><td>0.063</td><td>0.019</td></tr>
+<tr><td style="text-align:left">Adjusted R<sup>2</sup></td><td>0.004</td><td>0.016</td><td>0.049</td><td>0.008</td></tr>
+<tr><td style="text-align:left">Residual Std. Error</td><td>0.027 (df = 1116)</td><td>0.026 (df = 286)</td><td>0.026 (df = 426)</td><td>0.028 (df = 543)</td></tr>
+<tr><td style="text-align:left">F Statistic</td><td>1.809<sup>*</sup> (df = 6; 1116)</td><td>1.770 (df = 6; 286)</td><td>4.740<sup>***</sup> (df = 6; 426)</td><td>1.735 (df = 6; 543)</td></tr>
+<tr><td colspan="5" style="border-bottom: 1px solid black"></td></tr><tr><td colspan="5" style="text-align:right"><sup>*</sup>p<0.1; <sup>**</sup>p<0.05; <sup>***</sup>p<0.01</td></tr>
 </table>

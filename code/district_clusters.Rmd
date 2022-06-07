@@ -27,8 +27,8 @@ merged_data_v3 <- read_csv("merged data v3.csv")
 districts <- merged_data_v3 |>
   filter(outlier == 0) |> 
   select(leaid,
-         student_teacher_ratio,
-           per_pupil_exp,
+         #student_teacher_ratio,
+           #per_pupil_exp,
            percent_urban,
            percent_suburb,
            percent_town,
@@ -234,9 +234,9 @@ districts <- mutate(districts, cluster = district_clusters$cluster)
 
 merged_data_clusters <- merged_data_v3 |>
   left_join(districts) |>
-  mutate(cluster_lab = case_when(cluster == 1 ~ "rural_white",
-                                 cluster == 2 ~ "urban_poc",
-                                 cluster == 3 ~ "asian_suburb",
+  mutate(cluster_lab = case_when(cluster == 1 ~ "asian_suburb",
+                                 cluster == 2 ~ "rural_white",
+                                 cluster == 3 ~ "urban_poc",
                                  cluster == 4 ~ "low_income_town"))
 
 write_csv(merged_data_clusters, "merged_data_clusters.csv")
