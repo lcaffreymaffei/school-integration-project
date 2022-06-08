@@ -109,14 +109,10 @@ cluster_one <- merged_data_clusters |>
            diffexpecd_hspwht,
            diffexpmin2_blkwht,
            diffexpmin2_hspwht,
-         hsflnfl,
-         hsecdnec,
          rswhtblk,
          rswhthsp,
          rsflnfl,
-         rsecdnec,
-        hswhthsp,
-        hswhtblk) |> 
+         rsecdnec) |> 
   drop_na()
 
 cluster_two <- merged_data_clusters |> 
@@ -130,14 +126,10 @@ cluster_two <- merged_data_clusters |>
            diffexpecd_hspwht,
            diffexpmin2_blkwht,
            diffexpmin2_hspwht,
-         hsflnfl,
-         hsecdnec,
          rswhtblk,
          rswhthsp,
          rsflnfl,
-         rsecdnec,
-        hswhtblk,
-        hswhthsp) |> 
+         rsecdnec) |> 
   drop_na()
 
 cluster_three <- merged_data_clusters |> 
@@ -150,14 +142,10 @@ cluster_three <- merged_data_clusters |>
            diffexpecd_hspwht,
            diffexpmin2_blkwht,
            diffexpmin2_hspwht,
-         hsflnfl,
-         hsecdnec,
          rswhtblk,
          rswhthsp,
          rsflnfl,
-         rsecdnec,
-        hswhtblk,
-        hswhthsp) |> 
+         rsecdnec) |> 
   drop_na()
 
 cluster_four <- merged_data_clusters |> 
@@ -170,14 +158,10 @@ cluster_four <- merged_data_clusters |>
            diffexpecd_hspwht,
            diffexpmin2_blkwht,
            diffexpmin2_hspwht,
-         hsflnfl,
-         hsecdnec,
          rswhtblk,
          rswhthsp,
          rsflnfl,
-         rsecdnec,
-        hswhtblk,
-        hswhthsp) |> 
+         rsecdnec) |> 
   drop_na()
 
 ```

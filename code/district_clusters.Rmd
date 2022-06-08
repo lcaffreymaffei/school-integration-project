@@ -27,8 +27,6 @@ merged_data_v3 <- read_csv("merged data v3.csv")
 districts <- merged_data_v3 |>
   filter(outlier == 0) |> 
   select(leaid,
-         #student_teacher_ratio,
-           #per_pupil_exp,
            percent_urban,
            percent_suburb,
            percent_town,
@@ -55,24 +53,6 @@ districts <- merged_data_v3 |>
            percent_sped,
            total_enrollment,
            ses_all_bayes) |>
-         #pct_stu_iss_black,
-         #pct_students_ooss_single_black,
-         #pct_students_ooss_multiple_black,
-         #pct_expulsions_no_ed_serv_black,
-         #pct_expulsions_with_ed_black,
-         #pct_expulsions_no_tol_black,
-         #pct_students_arrested_black,
-         #pct_students_ooss_single_hsp,
-         #pct_students_ooss_multiple_hsp,
-         #pct_expulsions_no_ed_serv_hsp,
-         #pct_expulsions_with_ed_hsp,
-         #pct_expulsions_no_tol_hsp,
-         #pct_students_arrested_hsp,
-         #pct_students_ooss_single_white,
-         #pct_students_ooss_multiple_white,
-         #pct_expulsions_with_ed_white,
-         #pct_expulsions_no_tol_white,
-         #pct_students_arrested_white 
   drop_na()
 
 # clusters based on segregation variables
@@ -178,6 +158,8 @@ tidy(seg_district_clusters)
 
 ```{r plot kmeans vars}
 # clusters based on all variables
+# cluster_data <- 
+  
 tidy(district_clusters) |>
   mutate(cluster = str_c("cluster_", 1:4)) |>
   pivot_longer(cols = -c(cluster, withinss, size),
@@ -201,6 +183,9 @@ tidy(district_clusters) |>
   guides(fill = "none") +
   scale_x_reordered() +
   coord_flip()
+
+write_csv(cluster_data, "cluster_data.csv")
+
 
 # clusters based on segregation variables
 tidy(seg_district_clusters) |>
