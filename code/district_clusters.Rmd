@@ -167,7 +167,7 @@ tidy(district_clusters) |>
                values_to = "Value") |>
   mutate(importance = Value * Value) |>
   group_by(cluster) |>
-  slice_max(importance, n = 10) |>
+  slice_max(importance, n = 15) |>
   ungroup() |>
   mutate(cluster = as.factor(cluster),
          Characteristic = reorder_within(Characteristic,
