@@ -18,9 +18,15 @@ library(tidymodels)
 library(corrplot)
 
 merged_data_clusters <- read_csv("merged_data_clusters.csv")
-
+merged_data_clusters$diffexpecd_blkwht <- merged_data_clusters$diffexpecd_blkwht * 100
+merged_data_clusters$diffexpecd_hspwht <- merged_data_clusters$diffexpecd_hspwht * 100
+merged_data_clusters$diffexpmin2_blkwht <- merged_data_clusters$diffexpmin2_blkwht * 100
+merged_data_clusters$diffexpmin2_hspwht <- merged_data_clusters$diffexpmin2_hspwht * 100
+merged_data_clusters$rswhtblk <- merged_data_clusters$rswhtblk * 100
+merged_data_clusters$rswhthsp <- merged_data_clusters$rswhthsp * 100
+merged_data_clusters$rsflnfl <- merged_data_clusters$rsflnfl * 100
+merged_data_clusters$rsecdnec <- merged_data_clusters$rsecdnec * 100
 ```
-
 
 ```{r correlation plot}
 # correlation plot for segregation variables in cluster one
@@ -37,7 +43,6 @@ cluster_one |>
            title = "Correlation Plot",
            mar=c(0,0,1,0))
 ```
-
 
 ## Normal Regression with Clusters - DID NOT USE IN FINAL
 
@@ -90,12 +95,10 @@ stargazer(reg_neg, type = "html", out = "neg_regressiontable.html", title = "ECD
 
 ```
 
-
 ```{r}
 # correlation table
 # normal regression
 ```
-
 
 ```{r cluster datasets}
 cluster_one <- merged_data_clusters |> 
@@ -165,8 +168,6 @@ cluster_four <- merged_data_clusters |>
   drop_na()
 
 ```
-
-
 
 ```{r}
 # cluster one
@@ -246,7 +247,6 @@ cluster_four_reg_neg <- lm(lr_all_ols_neg ~ student_teacher_ratio + per_pupil_ex
 summary(cluster_four_reg_neg)
 ```
 
-
 ```{r regression tables by outcome}
 cluster_names = c("Asian Suburb",  "Rural White", "Urban POC", "Low-Income Town")
 
@@ -264,7 +264,6 @@ stargazer(cluster_one_reg_neg, cluster_two_reg_neg, cluster_three_reg_neg, clust
 ```
 
 ## Regularized Regression with Clusters - DID NOT USE IN FINAL
-
 
 ```{r cluster one}
 
@@ -381,7 +380,6 @@ tidy(cluster_one_final_fit) |>
   coord_flip()
 ```
 
-
 ```{r cluster two}
 # outcomes: lr_all_ols_whg, lr_all_ols_wbg, lr_all_ols_neg
 
@@ -494,7 +492,6 @@ tidy(cluster_two_final_fit) |>
   geom_col() +
   coord_flip()
 ```
-
 
 ```{r cluster three}
 
@@ -619,4 +616,3 @@ hist(merged_data_clusters$diffexpmin2_hspwht)
 sd(merged_data_clusters$diffexpmin2_hspwht, na.rm = T)
   
 ```
-
