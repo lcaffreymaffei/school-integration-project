@@ -225,6 +225,9 @@ merged_data_clusters <- merged_data_v3 |>
                                  cluster == 4 ~ "low_income_town"))
 
 write_csv(merged_data_clusters, "merged_data_clusters.csv")
+
+# count of districts in each cluster
+table(districts$cluster)
 ```
 
 
