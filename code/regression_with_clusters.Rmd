@@ -16,6 +16,8 @@ library(stargazer)
 library(glmnet)
 library(tidymodels)
 library(corrplot)
+library(lmtest)
+library(sandwich)
 
 merged_data_clusters <- read_csv("merged_data_clusters.csv")
 
@@ -90,12 +92,7 @@ stargazer(reg_neg, type = "html", out = "neg_regressiontable.html", title = "ECD
 
 ```
 
-
-```{r}
-# correlation table
-# normal regression
-```
-
+## Normal Regression with Clusters v2 
 
 ```{r cluster datasets}
 cluster_one <- merged_data_clusters |> 
@@ -168,99 +165,123 @@ cluster_four <- merged_data_clusters |>
 
 
 
-```{r}
+```{r regression}
 # cluster one
 cluster_one_reg_whg <- lm(lr_all_ols_whg ~ student_teacher_ratio + per_pupil_exp +
-                            diffexpecd_hspwht + diffexpmin2_hspwht + rswhthsp + hswhthsp,
+                            diffexpecd_hspwht + diffexpmin2_hspwht + rswhthsp,
          data = cluster_one)
 
 summary(cluster_one_reg_whg)
+one_whg_cov <- vcovHC(cluster_one_reg_whg, type="HC1") # robust standard errors
+one_whg_robust_se <- sqrt(diag(one_whg_cov)) # robust standard errors
 
 cluster_one_reg_wbg <- lm(lr_all_ols_wbg ~ student_teacher_ratio + per_pupil_exp +
-                            diffexpecd_blkwht + diffexpmin2_blkwht + rswhtblk + hswhtblk,
+                            diffexpecd_blkwht + diffexpmin2_blkwht + rswhtblk,
          data = cluster_one)
 
 summary(cluster_one_reg_wbg)
+one_wbg_cov <- vcovHC(cluster_one_reg_wbg, type="HC1") # robust standard errors
+one_wbg_robust_se <- sqrt(diag(one_wbg_cov)) # robust standard errors
 
 cluster_one_reg_neg <- lm(lr_all_ols_neg ~ student_teacher_ratio + per_pupil_exp +
-                            hsflnfl + hsecdnec + rsflnfl + rsecdnec,
+                            rsflnfl + rsecdnec,
          data = cluster_one)
 
 summary(cluster_one_reg_neg)
+one_neg_cov <- vcovHC(cluster_one_reg_neg, type="HC1") # robust standard errors
+one_neg_robust_se <- sqrt(diag(one_neg_cov)) # robust standard errors
 
 # cluster two
 cluster_two_reg_whg <- lm(lr_all_ols_whg ~ student_teacher_ratio + per_pupil_exp +
-                            diffexpecd_hspwht + diffexpmin2_hspwht + rswhthsp + hswhthsp,
+                            diffexpecd_hspwht + diffexpmin2_hspwht + rswhthsp,
          data = cluster_two)
 
 summary(cluster_two_reg_whg)
+two_whg_cov <- vcovHC(cluster_two_reg_whg, type="HC1") # robust standard errors
+two_whg_robust_se <- sqrt(diag(two_whg_cov)) # robust standard errors
 
 cluster_two_reg_wbg <- lm(lr_all_ols_wbg ~ student_teacher_ratio + per_pupil_exp +
-                            diffexpecd_blkwht + diffexpmin2_blkwht + rswhtblk + hswhtblk,
+                            diffexpecd_blkwht + diffexpmin2_blkwht + rswhtblk,
          data = cluster_two)
 
 summary(cluster_two_reg_wbg)
+two_wbg_cov <- vcovHC(cluster_two_reg_wbg, type="HC1") # robust standard errors
+two_wbg_robust_se <- sqrt(diag(two_wbg_cov)) # robust standard errors
 
 cluster_two_reg_neg <- lm(lr_all_ols_neg ~ student_teacher_ratio + per_pupil_exp +
-                            hsflnfl + hsecdnec + rsflnfl + rsecdnec,
+                            rsflnfl + rsecdnec,
          data = cluster_two)
 
 summary(cluster_two_reg_neg)
+two_neg_cov <- vcovHC(cluster_two_reg_neg, type="HC1") # robust standard errors
+two_neg_robust_se <- sqrt(diag(two_neg_cov)) # robust standard errors
 
 # cluster three
 cluster_three_reg_whg <- lm(lr_all_ols_whg ~ student_teacher_ratio + per_pupil_exp +
-                            diffexpecd_hspwht + diffexpmin2_hspwht + rswhthsp + hswhthsp,
+                            diffexpecd_hspwht + diffexpmin2_hspwht + rswhthsp,
          data = cluster_three)
 
 summary(cluster_three_reg_whg)
+three_whg_cov <- vcovHC(cluster_three_reg_whg, type="HC1") # robust standard errors
+three_whg_robust_se <- sqrt(diag(three_whg_cov)) # robust standard errors
 
 cluster_three_reg_wbg <- lm(lr_all_ols_wbg ~ student_teacher_ratio + per_pupil_exp +
-                            diffexpecd_blkwht + diffexpmin2_blkwht + rswhtblk + hswhtblk,
+                            diffexpecd_blkwht + diffexpmin2_blkwht + rswhtblk,
          data = cluster_three)
 
 summary(cluster_three_reg_wbg)
+three_wbg_cov <- vcovHC(cluster_three_reg_wbg, type="HC1") # robust standard errors
+three_wbg_robust_se <- sqrt(diag(three_wbg_cov)) # robust standard errors
 
 cluster_three_reg_neg <- lm(lr_all_ols_neg ~ student_teacher_ratio + per_pupil_exp +
-                            hsflnfl + hsecdnec + rsflnfl + rsecdnec,
+                            rsflnfl + rsecdnec,
          data = cluster_three)
 
 summary(cluster_three_reg_neg)
+three_neg_cov <- vcovHC(cluster_three_reg_neg, type="HC1") # robust standard errors
+three_neg_robust_se <- sqrt(diag(three_neg_cov)) # robust standard errors
 
 # cluster four
 cluster_four_reg_whg <- lm(lr_all_ols_whg ~ student_teacher_ratio + per_pupil_exp +
-                            diffexpecd_hspwht + diffexpmin2_hspwht + rswhthsp + hswhthsp,
+                            diffexpecd_hspwht + diffexpmin2_hspwht + rswhthsp,
          data = cluster_four)
 
 summary(cluster_four_reg_whg)
+four_whg_cov <- vcovHC(cluster_four_reg_whg, type="HC1") # robust standard errors
+four_whg_robust_se <- sqrt(diag(four_whg_cov)) # robust standard errors
 
 cluster_four_reg_wbg <- lm(lr_all_ols_wbg ~ student_teacher_ratio + per_pupil_exp +
-                            diffexpecd_blkwht + diffexpmin2_blkwht + rswhtblk + hswhtblk,
+                            diffexpecd_blkwht + diffexpmin2_blkwht + rswhtblk,
          data = cluster_four)
 
 summary(cluster_four_reg_wbg)
+four_wbg_cov <- vcovHC(cluster_four_reg_wbg, type="HC1") # robust standard errors
+four_wbg_robust_se <- sqrt(diag(four_wbg_cov)) # robust standard errors
 
 cluster_four_reg_neg <- lm(lr_all_ols_neg ~ student_teacher_ratio + per_pupil_exp +
-                            hsflnfl + hsecdnec + rsflnfl + rsecdnec,
+                            rsflnfl + rsecdnec,
          data = cluster_four)
 
 summary(cluster_four_reg_neg)
+four_neg_cov <- vcovHC(cluster_four_reg_neg, type="HC1") # robust standard errors
+four_neg_robust_se <- sqrt(diag(four_neg_cov)) # robust standard errors
 ```
 
 
 ```{r regression tables by outcome}
 cluster_names = c("Asian Suburb",  "Rural White", "Urban POC", "Low-Income Town")
 
-whg_varnames = c("Intercept", "Student-Teacher Ratio", "Per-Pupil Expenditures", "Hispanic-White Difference in Exposure to ECD Students", "Hispanic-White Difference in Exposure to Minority Students", "Relative Diversity Index Between Schools: White/Hispanic","Information Index Between Schools: White/Hispanic")
+whg_varnames = c("Intercept", "Student-Teacher Ratio", "Per-Pupil Expenditures", "Hispanic-White Difference in Exposure to ECD Students", "Hispanic-White Difference in Exposure to Minority Students", "White - Hispanic Exposure Difference to White Students")
 
-stargazer(cluster_one_reg_whg, cluster_two_reg_whg, cluster_three_reg_whg, cluster_four_reg_whg, type = "html", out = "whg_regressiontable.html", title = "White-Hispanic Learning Rate Gaps by Segregation Measures", covariate.labels = whg_varnames, dep.var.caption = "", dep.var.labels = "", intercept.bottom = FALSE, notes.label = "", column.labels = cluster_names)
+stargazer(cluster_one_reg_whg, cluster_two_reg_whg, cluster_three_reg_whg, cluster_four_reg_whg, type = "html", out = "whg_regressiontable.html", title = "White-Hispanic Learning Rate Gaps by Segregation Measures", covariate.labels = whg_varnames, dep.var.caption = "", dep.var.labels = "", intercept.bottom = FALSE, notes.label = "", column.labels = cluster_names, se = list(one_whg_robust_se, two_whg_robust_se, three_whg_robust_se, four_whg_robust_se))
 
-wbg_varnames = c("Intercept", "Student-Teacher Ratio", "Per-Pupil Expenditures", "Black-White Difference in Exposure to ECD Students", "Black-White Difference in Exposure to Minority Students", "Relative Diversity Index Between Schools: White/Black","Information Index Between Schools: White/Black")
+wbg_varnames = c("Intercept", "Student-Teacher Ratio", "Per-Pupil Expenditures", "Black-White Difference in Exposure to ECD Students", "Black-White Difference in Exposure to Minority Students", "White - Black Exposure Difference to White Students")
 
-stargazer(cluster_one_reg_wbg, cluster_two_reg_wbg, cluster_three_reg_wbg, cluster_four_reg_wbg, type = "html", out = "wbg_regressiontable.html", title = "White-Black Learning Rate Gaps by Segregation Measures", covariate.labels = wbg_varnames, dep.var.caption = "", dep.var.labels = "", intercept.bottom = FALSE, notes.label = "", column.labels = cluster_names)
+stargazer(cluster_one_reg_wbg, cluster_two_reg_wbg, cluster_three_reg_wbg, cluster_four_reg_wbg, type = "html", out = "wbg_regressiontable.html", title = "White-Black Learning Rate Gaps by Segregation Measures", covariate.labels = wbg_varnames, dep.var.caption = "", dep.var.labels = "", intercept.bottom = FALSE, notes.label = "", column.labels = cluster_names, se = list(one_wbg_robust_se, two_wbg_robust_se, three_wbg_robust_se, four_wbg_robust_se))
 
-neg_varnames = c("Intercept", "Student-Teacher Ratio", "Per-Pupil Expenditures", "Information Index Between Schools: Free Lunch/Non Free Lunch", "Information Index Between Schools: ECD/Non-ECD", "Relative Diversity Index Between Schools: Free Lunch/Non Free Lunch", "Relative Diversity Index Between Schools: ECD/Non-ECD")
+neg_varnames = c("Intercept", "Student-Teacher Ratio", "Per-Pupil Expenditures", "Non-Free Lunch - Free Lunch Exposure Difference to White Students", "Non-ECD - ECD Exposure Difference to White Students")
 
-stargazer(cluster_one_reg_neg, cluster_two_reg_neg, cluster_three_reg_neg, cluster_four_reg_neg, type = "html", out = "neg_regressiontable.html", title = "ECD-Non-ECD Learning Rate Gaps by Segregation Measures", covariate.labels = neg_varnames, dep.var.caption = "", dep.var.labels = "", intercept.bottom = FALSE, notes.label = "", column.labels = cluster_names)
+stargazer(cluster_one_reg_neg, cluster_two_reg_neg, cluster_three_reg_neg, cluster_four_reg_neg, type = "html", out = "neg_regressiontable.html", title = "ECD-Non-ECD Learning Rate Gaps by Segregation Measures", covariate.labels = neg_varnames, dep.var.caption = "", dep.var.labels = "", intercept.bottom = FALSE, notes.label = "", column.labels = cluster_names, se = list(one_neg_robust_se, two_neg_robust_se, three_neg_robust_se, four_neg_robust_se))
 ```
 
 ## Regularized Regression with Clusters - DID NOT USE IN FINAL
